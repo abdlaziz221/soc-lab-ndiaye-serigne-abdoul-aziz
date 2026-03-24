@@ -1,0 +1,26 @@
+# Variables d'environnement
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# Logs et données temporaires
+suricata/logs/*.log
+suricata/logs/*.json
+wazuh/logs/
+grafana/provisioning/
+thehive/cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Système
+.DS_Store
+Thumbs.db
