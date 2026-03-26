@@ -1,108 +1,175 @@
 networks:
   soc-frontend:
-    name: ${DOCKER_NETWORK_FRONTEND}
     driver: bridge
+    name: soc-frontend
   soc-backend:
-    name: ${DOCKER_NETWORK_BACKEND}
     driver: bridge
+    name: soc-backend
 
 volumes:
-  wazuh-data:
-    name: ${WAZUH_DATA_VOLUME}
+  wazuh-indexer-data:
+  wazuh-manager-data:
+  wazuh-dashboard-data:
+  suricata-logs:
   grafana-data:
-    name: ${GRAFANA_DATA_VOLUME}
-  thehive-data:
-    name: ${THEHIVE_DATA_VOLUME}
   cassandra-data:
-    name: ${CASSANDRA_DATA_VOLUME}
+  thehive-data:
 
 services:
+
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.7.0
+    container_name: wazuh-indexer
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      bootstrap.memory_lock: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./wazuh/config/opensearch.yml:/usr/share/wazuh-indexer/config/opensearch.yml:ro
+    networks:
+      - soc-backend
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /usr/share/wazuh-indexer/config/opensearch.yml ] && exit 0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   wazuh-manager:
     image: wazuh/wazuh-manager:4.7.0
     container_name: wazuh-manager
+    hostname: wazuh.manager
+    restart: unless-stopped
     ports:
-      - "${WAZUH_MANAGER_PORT_UDP}:1514/udp"
-      - "${WAZUH_MANAGER_PORT_TCP}:1515/tcp"
-      - "${WAZUH_API_PORT}:55000/tcp"
+      - "1514:1514/udp"
+      - "1515:1515/tcp"
+      - "55000:55000/tcp"
+    environment:
+      INDEXER_URL: "https://wazuh-indexer:9200"
+      INDEXER_USERNAME: "${WAZUH_INDEXER_USERNAME}"
+      INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD}"
+      INDEXER_SSL_VERIFICATION_MODE: "none"
+      FILEBEAT_SSL_VERIFICATION_MODE: "none"
+      API_USERNAME: "${WAZUH_API_USERNAME}"
+      API_PASSWORD: "${WAZUH_API_PASSWORD}"
+    volumes:
+      - wazuh-manager-data:/var/ossec/data
     networks:
       - soc-backend
-    volumes:
-      - ${WAZUH_DATA_VOLUME}:/var/ossec/data
-    environment:
-      - TZ=UTC
-    restart: unless-stopped
+      - soc-frontend
+    healthcheck:
+      disable: true
 
   wazuh-dashboard:
     image: wazuh/wazuh-dashboard:4.7.0
     container_name: wazuh-dashboard
+    hostname: wazuh.dashboard
+    restart: unless-stopped
     ports:
-      - "${WAZUH_DASHBOARD_PORT}:5601"
+      - "443:5601"
+    environment:
+      OPENSEARCH_HOSTS: "https://wazuh-indexer:9200"
+      OPENSEARCH_SSL_VERIFICATION_MODE: "none"
+      OPENSEARCH_USERNAME: "${WAZUH_INDEXER_USERNAME}"
+      OPENSEARCH_PASSWORD: "${WAZUH_INDEXER_PASSWORD}"
+      WAZUH_API_URL: "http://wazuh-manager"
+      API_USERNAME: "${WAZUH_API_USERNAME}"
+      API_PASSWORD: "${WAZUH_API_PASSWORD}"
     networks:
       - soc-frontend
-    environment:
-      - WAZUH_API_URL=http://wazuh-manager:55000
-      - WAZUH_API_USERNAME=${WAZUH_ADMIN_USER}
-      - WAZUH_API_PASSWORD=${WAZUH_ADMIN_PASSWORD}
-      - TZ=UTC
-    restart: unless-stopped
+      - soc-backend
+    healthcheck:
+      disable: true
 
   suricata:
     image: jasonish/suricata:latest
     container_name: suricata
-    network_mode: host
+    restart: unless-stopped
     cap_add:
       - NET_ADMIN
       - NET_RAW
+      - SYS_NICE
+    volumes:
+      - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml:rw
+      - ./suricata/rules:/etc/suricata/rules:rw
+      - suricata-logs:/var/log/suricata
+    command: ["/bin/sh", "-c", "echo 'Suricata placeholder - démarrage manuel possible'; sleep infinity"]
+    networks:
+      - soc-backend
+    healthcheck:
+      disable: true
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
     restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - soc-frontend
+      - soc-backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health | grep -q 'database'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   cassandra:
     image: cassandra:4.1
     container_name: cassandra
-    ports:
-      - "9042:9042"
+    restart: unless-stopped
+    environment:
+      CASSANDRA_CLUSTER_NAME: "${CASSANDRA_CLUSTER_NAME}"
+      CASSANDRA_DC: "${CASSANDRA_DC}"
+      HEAP_NEWSIZE: "128M"
+      MAX_HEAP_SIZE: "512M"
+    volumes:
+      - cassandra-data:/var/lib/cassandra
     networks:
       - soc-backend
-    volumes:
-      - ${CASSANDRA_DATA_VOLUME}:/var/lib/cassandra
-    environment:
-      - CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NAME}
-      - CASSANDRA_DC=${CASSANDRA_DC_NAME}
-      - CASSANDRA_RACK=rack1
-      - CASSANDRA_SEEDS=cassandra
-      - TZ=UTC
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 90s
 
   thehive:
     image: strangebee/thehive:5.1.2
     container_name: thehive
+    restart: unless-stopped
     ports:
-      - "${THEHIVE_PORT}:9000"
+      - "9000:9000"
+    environment:
+      JVM_OPTS: "-Xms512m -Xmx1g"
+    volumes:
+      - thehive-data:/opt/thehive/data
+      - ./thehive/config/application.conf:/etc/thehive/application.conf:ro
     networks:
       - soc-frontend
       - soc-backend
-    volumes:
-      - ${THEHIVE_DATA_VOLUME}:/data
-    environment:
-      - TH_SECRET=${THEHIVE_API_KEY}
-      - CASSANDRA_SEED_PROVIDER=org.apache.cassandra.locator.SimpleSeedProvider
-      - CASSANDRA_SEEDS=cassandra
-      - TZ=UTC
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "${GRAFANA_PORT}:3000"
-    networks:
-      - soc-frontend
-    volumes:
-      - ${GRAFANA_DATA_VOLUME}:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
-      - GF_INSTALL_PLUGINS=${GF_INSTALL_PLUGINS}
-      - GF_SERVER_ROOT_URL=http://localhost:3000
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - TZ=UTC
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/health | grep -q 'status'"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s

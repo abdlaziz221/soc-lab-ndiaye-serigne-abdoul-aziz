@@ -1,0 +1,1 @@
+generate_evidence.sh: line 95: hydra: command not found

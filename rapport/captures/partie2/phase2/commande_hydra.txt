@@ -1,0 +1,1 @@
+Commande : hydra -l root -P /tmp/10pass.txt -t 4 ssh://localhost:2222

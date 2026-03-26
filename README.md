@@ -1,40 +1,87 @@
-# SOC Lab Conteneurisé - L2 SIMAC - SERIGNE ABDOUL AZIZ NDIAYE
+# SOC Lab Conteneurisé — L2 SIMAC
 
-Déploiement complet d'un Security Operations Center (SOC) avec Docker Compose.
+Stack complète : **Wazuh · Suricata · Grafana · TheHive · Cassandra**
 
-## Services déployés
+## Déploiement rapide
 
-| Service | Image | Port(s) | Réseau | Rôle |
-|---------|-------|---------|--------|------|
-| **Wazuh Manager** | wazuh/wazuh-manager:4.7.0 | 1514/UDP, 1515/TCP, 55000/TCP | soc-backend | SIEM & Agent Management |
-| **Wazuh Dashboard** | wazuh/wazuh-dashboard:4.7.0 | 443/TCP | soc-frontend | Interface Web Wazuh |
-| **Suricata** | jasonish/suricata:latest | - | host | IDS/IPS |
-| **Cassandra** | cassandra:4.1 | 9042/TCP | soc-backend | BD TheHive |
-| **TheHive** | strangebee/thehive:5.1.2 | 9000/TCP | soc-frontend + soc-backend | Réponse à incident |
-| **Grafana** | grafana/grafana:latest | 3000/TCP | soc-frontend | Dashboards |
+```bash
+# 1. Cloner le dépôt
+git clone <url-repo> soc-lab-[NOM_ETUDIANT]
+cd soc-lab-[NOM_ETUDIANT]
 
+# 2. Configurer les variables
+cp .env.example .env
+nano .env   # Remplir les mots de passe
+
+# 3. Déployer
+bash setup.sh
+
+# 4. Vérifier
+watch -n5 'docker compose ps'
+```
 
 ## Prérequis
 
-- Docker et Docker Compose installés
-- **vm.max_map_count = 262144**
-- 8 GB RAM minimum
-- 2 CPUs minimum
+- Docker Engine ≥ 24.0
+- Docker Compose ≥ 2.0
+- RAM : 8 Go minimum
+- `vm.max_map_count=262144` (géré par setup.sh)
 
-## Installation
+## Accès aux interfaces
 
-### 1. Configurer vm.max_map_count
+| Service | URL | Identifiants |
+|---------|-----|-------------|
+| Wazuh Dashboard | https://localhost | admin / voir .env |
+| Grafana | http://localhost:3000 | admin / voir .env |
+| TheHive | http://localhost:9000 | admin@thehive.local / secret |
+| Wazuh Indexer | https://localhost:9200 | admin / voir .env |
+
+## Architecture réseau
+
+```
+                    ┌──────────────────────────────┐
+  EXTERNE           │  soc-frontend (172.20.x.x)   │
+  :443, :3000, :9000│  wazuh-dashboard              │
+                    │  grafana                      │
+                    │  thehive                      │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────┴───────────────┐
+                    │  soc-backend (172.21.x.x)    │
+                    │  wazuh-indexer               │
+                    │  wazuh-manager               │
+                    │  cassandra                   │
+                    └──────────────────────────────┘
+                    
+                    ┌──────────────────────────────┐
+                    │  soc-monitoring (172.22.x.x) │
+                    │  suricata (IDS — isolé)      │
+                    └──────────────────────────────┘
+```
+
+## Diagnostic
 
 ```bash
-# Vérifier la valeur actuelle
-sysctl vm.max_map_count
+bash diagnostic_soc.sh
+```
 
-# Corriger temporairement
-sudo sysctl -w vm.max_map_count=262144
+## Structure du dépôt
 
-# Rendre persistant
-echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
-
-# Vérifier
-sysctl vm.max_map_count
+```
+soc-lab-[NOM]/
+├── README.md
+├── docker-compose.yml
+├── setup.sh
+├── diagnostic_soc.sh
+├── .env.example
+├── .gitignore
+├── suricata/
+│   ├── suricata.yaml
+│   ├── rules/local.rules
+│   └── logs/.gitkeep
+├── grafana/dashboards/
+├── thehive/config/application.conf
+└── rapport/
+    ├── rapport-final.pdf
+    └── captures/
+```

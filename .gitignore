@@ -1,26 +1,18 @@
-# Variables d'environnement
+# ================================================================
+# .gitignore — SOC Lab
+# ================================================================
+
+# CRITIQUE : ne jamais committer le vrai fichier .env
 .env
-.env.local
-.env.*.local
 
-# Docker
-docker-compose.override.yml
-.docker/
+# Logs Suricata (générés à l'exécution)
+suricata/logs/
+*.log
 
-# Logs et données temporaires
-suricata/logs/*.log
-suricata/logs/*.json
-wazuh/logs/
-grafana/provisioning/
-thehive/cache/
+# Données générées par les conteneurs
+data/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Système
+# Fichiers système
 .DS_Store
-Thumbs.db
+*.swp
+*~
