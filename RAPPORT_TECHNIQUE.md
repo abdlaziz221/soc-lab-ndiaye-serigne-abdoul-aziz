@@ -249,6 +249,32 @@ curl -sk https://localhost:9200/wazuh-*/_search
 | Cassandra DC | datacenter1 | Single DC lab OK |
 | SSL Verification | none | Lab dev, certs auto-signés |
 
+---
+
+## 6. Validation & captures recommandées
+
+Le fichier `cmd_captures` est fourni à la racine avec la liste complète des commandes à exécuter pour générer les captures d'écran demandées.
+
+- Contrôler la stack : `docker compose ps`
+- Accéder au cluster : `curl -k -u admin:SecretPassword https://localhost:9200` (Capture 1)
+- Exposer Wazuh Manager : `docker compose logs wazuh-manager --tail 20` (Capture 2)
+- Wazuh dashboard prêt : `curl -k -I https://localhost` (Capture 3)
+- Grafana et TheHive disponibles (Capture 4, Capture 5)
+
+## 7. Nettoyage et mise en état "production minimale"
+
+Actions effectuées :
+
+1. Suppression des fichiers temporaires et extraits non requis : `securityadmin.sh` et dossier `opensearch-security/` local.
+2. Conteneur `suricata` basculé en `restart: "no"` + `tail -f /dev/null` pour éviter le crash loop en mode placeholder.
+3. Initialisation OpenSearch Security exécutée via `securityadmin.sh` (certs root/admin/admin-key) et synchronisation des users.
+
+## 8. Notes de complétion
+
+- Le socle Wazuh est opérationnel, clé du projet respectée.
+- Suricata est en mode placeholder (démarrable en production par la commande et une interface existante).
+- TheHive est fonctionnel mais peut nécessiter 1-2 minutes de démarrage complet (health=starting puis healthy).
+
 ### 5.2 Volumes Persistants
 
 ```yaml

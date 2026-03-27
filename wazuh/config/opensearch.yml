@@ -2,4 +2,4 @@ cluster.name: wazuh-cluster
 node.name: wazuh-indexer
 network.host: 0.0.0.0
 discovery.type: single-node
-plugins.security.disabled: true
+plugins.security.enabled: false

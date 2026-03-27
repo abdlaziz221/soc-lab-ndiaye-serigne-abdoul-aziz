@@ -95,7 +95,7 @@ services:
   suricata:
     image: jasonish/suricata:latest
     container_name: suricata
-    restart: unless-stopped
+    restart: "no"
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -104,7 +104,7 @@ services:
       - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml:rw
       - ./suricata/rules:/etc/suricata/rules:rw
       - suricata-logs:/var/log/suricata
-    command: ["/bin/sh", "-c", "echo 'Suricata placeholder - démarrage manuel possible'; sleep infinity"]
+    command: ["/bin/sh", "-c", "echo 'Suricata placeholder - démarrage manuel possible'; tail -f /dev/null"]
     networks:
       - soc-backend
     healthcheck:
